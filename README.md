@@ -6,6 +6,12 @@ Provides async HTTP and WebSocket clients for trading on Bybit, with
 HMAC-SHA256 and RSA authentication, automatic retry/rate-limit handling,
 and full V5 API coverage.
 
+Migrated from the official Python SDK
+[pybit](https://github.com/bybit-exchange/pybit)
+(commit [`fb34fca`](https://github.com/bybit-exchange/pybit/commit/fb34fca))
+to idiomatic Rust using [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
+by Anthropic.
+
 ## Installation
 
 Add to your `Cargo.toml`:
