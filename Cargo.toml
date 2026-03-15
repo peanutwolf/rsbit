@@ -1,0 +1,54 @@
+[package]
+name = "rsbit"
+version = "0.1.0"
+edition = "2021"
+description = "Rust SDK for the Bybit V5 API"
+license = "MIT"
+
+[features]
+default = ["rustls-tls"]
+rustls-tls = ["reqwest/rustls-tls", "tokio-tungstenite/rustls-tls-webpki-roots"]
+native-tls = ["reqwest/native-tls", "tokio-tungstenite/native-tls"]
+
+[dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json"], default-features = false }
+
+# WebSocket
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Cryptography
+hmac = "0.12"
+sha2 = { version = "0.10", features = ["oid"] }
+rsa = "0.9"
+base64 = "0.22"
+
+# Error handling
+thiserror = "2"
+
+# Utilities
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "test-util"] }
+
+[[example]]
+name = "http_basic"
+
+[[example]]
+name = "ws_orderbook"
+
+[[example]]
+name = "ws_trading"
