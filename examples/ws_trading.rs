@@ -16,10 +16,8 @@ use rsbit::ws::trading::WsTradingManager;
 async fn main() -> rsbit::error::Result<()> {
     tracing_subscriber::fmt::init();
 
-    let api_key = std::env::var("BYBIT_TESTNET_KEY")
-        .expect("Set BYBIT_TESTNET_KEY env var");
-    let api_secret = std::env::var("BYBIT_TESTNET_SECRET")
-        .expect("Set BYBIT_TESTNET_SECRET env var");
+    let api_key = "BYBIT_TESTNET_KEY".to_string();
+    let api_secret = "BYBIT_TESTNET_SECRET".to_string();
 
     // Connect to testnet trade WebSocket
     let config = WsConfig::trade_testnet(&api_key, &api_secret);

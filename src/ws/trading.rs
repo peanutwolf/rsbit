@@ -125,18 +125,9 @@ impl WsTradingManager {
         self.authenticated.store(false, Ordering::SeqCst);
         tracing::debug!("Connected to {}", self.url);
 
-        // Authenticate (trading always requires auth)
-        self.authenticate().await?;
-
-        // Spawn the ping task
-        spawn_ping_task(
-            Arc::clone(&self.writer),
-            self.config.ping_interval,
-            Arc::clone(&self.connected),
-            self.shutdown_tx.subscribe(),
-        );
-
-        // Spawn the read loop
+        // Spawn the read loop BEFORE authenticating so that auth responses
+        // are processed (mirrors pybit's approach where run_forever() starts
+        // the read thread before _auth() is called).
         let read_pending = Arc::clone(&self.pending);
         let read_connected = Arc::clone(&self.connected);
         let read_authenticated = Arc::clone(&self.authenticated);
@@ -181,6 +172,17 @@ impl WsTradingManager {
                 }
             }
         });
+
+        // Authenticate (trading always requires auth)
+        self.authenticate().await?;
+
+        // Spawn the ping task
+        spawn_ping_task(
+            Arc::clone(&self.writer),
+            self.config.ping_interval,
+            Arc::clone(&self.connected),
+            self.shutdown_tx.subscribe(),
+        );
 
         Ok(())
     }

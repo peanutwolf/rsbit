@@ -4,6 +4,11 @@ version = "0.1.0"
 edition = "2021"
 description = "Rust SDK for the Bybit V5 API"
 license = "MIT"
+repository = "https://github.com/peanutwolf/rsbit"
+homepage = "https://github.com/peanutwolf/rsbit"
+readme = "README.md"
+keywords = ["bybit", "trading", "api", "websocket", "crypto"]
+categories = ["api-bindings", "cryptography"]
 
 [features]
 default = ["rustls-tls"]

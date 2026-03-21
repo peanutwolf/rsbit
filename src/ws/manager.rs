@@ -214,7 +214,7 @@ impl WsManager {
     /// The read loop automatically reconnects on connection loss when
     /// `restart_on_error` is enabled in the config.
     pub async fn connect(&self) -> Result<()> {
-        let read = self.establish_connection().await?;
+        self.establish_connection().await?;
 
         // Spawn the ping task
         spawn_ping_task(
@@ -224,7 +224,33 @@ impl WsManager {
             self.shutdown_tx.subscribe(),
         );
 
-        // Spawn the read loop with reconnect support
+        Ok(())
+    }
+
+    /// Perform the WebSocket handshake, spawn the read loop, authenticate
+    /// if private, and resubscribe.
+    async fn establish_connection(&self) -> Result<()> {
+        tracing::debug!("Connecting to {}", self.url);
+
+        let (ws_stream, _response) =
+            tokio_tungstenite::connect_async(&self.url)
+                .await
+                .map_err(BybitError::WebSocket)?;
+
+        let (write, read) = ws_stream.split();
+
+        // Store the writer
+        {
+            let mut w = self.writer.lock().await;
+            *w = Some(write);
+        }
+        self.connected.store(true, Ordering::SeqCst);
+        self.authenticated.store(false, Ordering::SeqCst);
+        tracing::debug!("Connected to {}", self.url);
+
+        // Spawn the read loop BEFORE authenticating so that auth responses
+        // are processed (mirrors pybit's approach where run_forever() starts
+        // the read thread before _auth() is called).
         let read_registry = Arc::clone(&self.registry);
         let read_connected = Arc::clone(&self.connected);
         let read_authenticated = Arc::clone(&self.authenticated);
@@ -251,38 +277,6 @@ impl WsManager {
             .await;
         });
 
-        Ok(())
-    }
-
-    /// Perform the WebSocket handshake, authenticate if private, and resubscribe.
-    /// Returns the read half of the stream.
-    async fn establish_connection(
-        &self,
-    ) -> Result<
-        futures_util::stream::SplitStream<
-            tokio_tungstenite::WebSocketStream<
-                tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
-            >,
-        >,
-    > {
-        tracing::debug!("Connecting to {}", self.url);
-
-        let (ws_stream, _response) =
-            tokio_tungstenite::connect_async(&self.url)
-                .await
-                .map_err(BybitError::WebSocket)?;
-
-        let (write, read) = ws_stream.split();
-
-        // Store the writer
-        {
-            let mut w = self.writer.lock().await;
-            *w = Some(write);
-        }
-        self.connected.store(true, Ordering::SeqCst);
-        self.authenticated.store(false, Ordering::SeqCst);
-        tracing::debug!("Connected to {}", self.url);
-
         // Authenticate if private channel
         if self.config.is_private() {
             self.authenticate().await?;
@@ -291,7 +285,7 @@ impl WsManager {
         // Resubscribe any stored subscriptions (from a previous connection)
         self.resubscribe().await?;
 
-        Ok(read)
+        Ok(())
     }
 
     /// Subscribe to a topic with a callback.
@@ -726,7 +720,7 @@ async fn reconnect(
             .await
             .map_err(BybitError::WebSocket)?;
 
-    let (write, read) = ws_stream.split();
+    let (write, mut read) = ws_stream.split();
 
     // Store new writer
     {
@@ -754,7 +748,9 @@ async fn reconnect(
         }
     };
 
-    // Authenticate if private channel
+    // Authenticate if private channel.
+    // Read messages inline while waiting for the auth response, since the
+    // caller's read loop is not running during reconnection.
     if config.is_private() {
         let auth_msg = auth::build_ws_auth_message(
             &config.client_config,
@@ -762,16 +758,34 @@ async fn reconnect(
         )?;
         send(&auth_msg).await?;
 
-        // Wait for auth response (up to 5 seconds)
-        for _ in 0..50 {
-            if authenticated.load(Ordering::SeqCst) {
-                tracing::debug!("Re-authentication successful");
-                break;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            tokio::select! {
+                msg = read.next() => {
+                    match msg {
+                        Some(Ok(Message::Text(text))) => {
+                            dispatch_message(&text, registry, authenticated, false).await;
+                        }
+                        Some(Ok(Message::Close(_))) => {
+                            tracing::warn!("Connection closed during re-auth");
+                            break;
+                        }
+                        Some(Ok(_)) => {}
+                        Some(Err(e)) => {
+                            return Err(BybitError::WebSocket(e));
+                        }
+                        None => break,
+                    }
+                    if authenticated.load(Ordering::SeqCst) {
+                        tracing::debug!("Re-authentication successful");
+                        break;
+                    }
+                }
+                _ = tokio::time::sleep_until(deadline) => {
+                    tracing::warn!("Re-authentication timed out");
+                    break;
+                }
             }
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
-        if !authenticated.load(Ordering::SeqCst) {
-            tracing::warn!("Re-authentication timed out");
         }
     }
 
