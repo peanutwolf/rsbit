@@ -673,7 +673,11 @@ async fn read_until_disconnect(
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        dispatch_message(&text, registry, authenticated, log).await;
+                        let registry = Arc::clone(registry);
+                        let authenticated = Arc::clone(authenticated);
+                        tokio::spawn(async move {
+                            dispatch_message(&text, &registry, &authenticated, log).await;
+                        });
                     }
                     Some(Ok(Message::Close(_))) => {
                         tracing::debug!("WebSocket closed by server");
@@ -764,7 +768,11 @@ async fn reconnect(
                 msg = read.next() => {
                     match msg {
                         Some(Ok(Message::Text(text))) => {
-                            dispatch_message(&text, registry, authenticated, false).await;
+                            let registry = Arc::clone(registry);
+                            let authenticated = Arc::clone(authenticated);
+                            tokio::spawn(async move {
+                                dispatch_message(&text, &registry, &authenticated, false).await;
+                            });
                         }
                         Some(Ok(Message::Close(_))) => {
                             tracing::warn!("Connection closed during re-auth");

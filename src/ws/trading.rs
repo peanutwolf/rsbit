@@ -140,11 +140,15 @@ impl WsTradingManager {
                     msg = read.next() => {
                         match msg {
                             Some(Ok(Message::Text(text))) => {
-                                dispatch_trading_message(
-                                    &text,
-                                    &read_pending,
-                                    &read_authenticated,
-                                ).await;
+                                let pending = Arc::clone(&read_pending);
+                                let authenticated = Arc::clone(&read_authenticated);
+                                tokio::spawn(async move {
+                                    dispatch_trading_message(
+                                        &text,
+                                        &pending,
+                                        &authenticated,
+                                    ).await;
+                                });
                             }
                             Some(Ok(Message::Close(_))) => {
                                 tracing::debug!("Trading WS closed by server");
