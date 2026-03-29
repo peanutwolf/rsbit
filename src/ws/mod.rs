@@ -12,7 +12,17 @@ pub mod trading;
 pub use manager::{WsConfig, WsManager};
 pub use trading::WsTradingManager;
 
+use std::sync::atomic::{AtomicU64, Ordering};
+
 use crate::config::ClientConfig;
+
+/// Global monotonic counter for generating unique request IDs.
+static NEXT_REQ_ID: AtomicU64 = AtomicU64::new(1);
+
+/// Generate a unique request ID string from the global atomic counter.
+pub(crate) fn next_req_id() -> String {
+    NEXT_REQ_ID.fetch_add(1, Ordering::Relaxed).to_string()
+}
 
 /// WS subdomain constants (different from HTTP's `api-*` subdomains).
 const WS_SUBDOMAIN_MAINNET: &str = "stream";

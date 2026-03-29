@@ -233,7 +233,7 @@ impl WsManager {
         tracing::debug!("Connecting to {}", self.url);
 
         let (ws_stream, _response) =
-            tokio_tungstenite::connect_async(&self.url)
+            tokio_tungstenite::connect_async_with_config(&self.url, None, true)
                 .await
                 .map_err(BybitError::WebSocket)?;
 
@@ -310,7 +310,7 @@ impl WsManager {
             }
         }
 
-        let req_id = uuid::Uuid::new_v4().to_string();
+        let req_id = super::next_req_id();
         let subscribe_msg = serde_json::json!({
             "op": "subscribe",
             "req_id": req_id,
@@ -720,7 +720,7 @@ async fn reconnect(
     tracing::debug!("Reconnecting to {}", url);
 
     let (ws_stream, _response) =
-        tokio_tungstenite::connect_async(url)
+        tokio_tungstenite::connect_async_with_config(url, None, true)
             .await
             .map_err(BybitError::WebSocket)?;
 

@@ -110,9 +110,10 @@ impl WsTradingManager {
     pub async fn connect(&self) -> Result<()> {
         tracing::debug!("Connecting to {}", self.url);
 
-        let (ws_stream, _response) = tokio_tungstenite::connect_async(&self.url)
-            .await
-            .map_err(BybitError::WebSocket)?;
+        let (ws_stream, _response) =
+            tokio_tungstenite::connect_async_with_config(&self.url, None, true)
+                .await
+                .map_err(BybitError::WebSocket)?;
 
         let (write, read) = ws_stream.split();
 
@@ -272,35 +273,44 @@ impl WsTradingManager {
         params: Value,
         callback: Callback,
     ) -> Result<()> {
-        let req_id = uuid::Uuid::new_v4().to_string();
+        let req_id = super::next_req_id();
+        let timestamp = generate_timestamp();
+        let params_json = params.to_string();
 
-        let mut header = serde_json::json!({
-            "X-BAPI-TIMESTAMP": generate_timestamp(),
-        });
+        let header = if self.recv_window > 0 && !self.referral_id.is_empty() {
+            format!(
+                r#"{{"X-BAPI-TIMESTAMP":{},"X-BAPI-RECV-WINDOW":{},"Referer":"{}"}}"#,
+                timestamp, self.recv_window, self.referral_id
+            )
+        } else if self.recv_window > 0 {
+            format!(
+                r#"{{"X-BAPI-TIMESTAMP":{},"X-BAPI-RECV-WINDOW":{}}}"#,
+                timestamp, self.recv_window
+            )
+        } else if !self.referral_id.is_empty() {
+            format!(
+                r#"{{"X-BAPI-TIMESTAMP":{},"Referer":"{}"}}"#,
+                timestamp, self.referral_id
+            )
+        } else {
+            format!(r#"{{"X-BAPI-TIMESTAMP":{}}}"#, timestamp)
+        };
 
-        if self.recv_window > 0 {
-            header["X-BAPI-RECV-WINDOW"] = serde_json::json!(self.recv_window);
-        }
-        if !self.referral_id.is_empty() {
-            header["Referer"] = serde_json::json!(self.referral_id);
-        }
+        let msg_str = format!(
+            r#"{{"reqId":"{}","header":{},"op":"{}","args":[{}]}}"#,
+            req_id, header, operation, params_json
+        );
 
-        let message = serde_json::json!({
-            "reqId": req_id,
-            "header": header,
-            "op": operation,
-            "args": [params],
-        });
+        // Send first to minimize latency — the network RTT ensures the
+        // callback is registered well before the response arrives.
+        self.send_raw(&msg_str).await?;
 
-        let msg_str = message.to_string();
-
-        // Store callback before sending (so it's ready for the response)
         {
             let mut pending = self.pending.write().await;
             pending.insert(req_id, callback);
         }
 
-        self.send_raw(&msg_str).await
+        Ok(())
     }
 
     /// Send the auth message.
@@ -595,5 +605,49 @@ mod tests {
         let msg = r#"{"op":"pong","ret_msg":"pong"}"#;
         dispatch_trading_message(msg, &pending, &authenticated).await;
         // No crash, no side effects
+    }
+
+    #[test]
+    fn format_based_message_is_valid_json() {
+        let req_id = "42";
+        let timestamp = 1234567890000u64;
+        let operation = "order.create";
+        let params_json = r#"{"category":"linear","symbol":"BTCUSDT"}"#;
+
+        let msg = format!(
+            r#"{{"reqId":"{}","header":{{"X-BAPI-TIMESTAMP":{}}},"op":"{}","args":[{}]}}"#,
+            req_id, timestamp, operation, params_json
+        );
+
+        let parsed: Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["reqId"], "42");
+        assert_eq!(parsed["op"], "order.create");
+        assert_eq!(parsed["header"]["X-BAPI-TIMESTAMP"], 1234567890000u64);
+        assert_eq!(parsed["args"][0]["symbol"], "BTCUSDT");
+    }
+
+    #[test]
+    fn format_based_message_with_all_headers() {
+        let req_id = "99";
+        let timestamp = 1234567890000u64;
+        let recv_window = 5000u32;
+        let referral_id = "my-ref";
+        let operation = "order.amend";
+        let params_json = r#"{"symbol":"ETHUSDT"}"#;
+
+        let header = format!(
+            r#"{{"X-BAPI-TIMESTAMP":{},"X-BAPI-RECV-WINDOW":{},"Referer":"{}"}}"#,
+            timestamp, recv_window, referral_id
+        );
+        let msg = format!(
+            r#"{{"reqId":"{}","header":{},"op":"{}","args":[{}]}}"#,
+            req_id, header, operation, params_json
+        );
+
+        let parsed: Value = serde_json::from_str(&msg).unwrap();
+        assert_eq!(parsed["reqId"], "99");
+        assert_eq!(parsed["header"]["X-BAPI-RECV-WINDOW"], 5000);
+        assert_eq!(parsed["header"]["Referer"], "my-ref");
+        assert_eq!(parsed["op"], "order.amend");
     }
 }

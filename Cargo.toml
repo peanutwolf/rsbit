@@ -40,7 +40,6 @@ base64 = "0.22"
 thiserror = "2"
 
 # Utilities
-uuid = { version = "1", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
