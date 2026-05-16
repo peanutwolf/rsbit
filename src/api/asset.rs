@@ -576,4 +576,38 @@ impl HttpManager {
         )
         .await
     }
+
+    // ── Asset Overview ─────────────────────────────────────────────
+
+    /// Query total assets and detailed holdings across accounts and categories.
+    /// <https://bybit-exchange.github.io/docs/v5/asset/balance/asset-overview>
+    pub async fn get_asset_overview(
+        &self,
+        params: GetAssetOverviewParams,
+    ) -> Result<ApiResponse> {
+        self.submit_request(
+            Method::Get,
+            asset::GET_ASSET_OVERVIEW,
+            Some(params_to_map(&params)),
+            true,
+        )
+        .await
+    }
+
+    // ── Funding Account History ────────────────────────────────────
+
+    /// Return transaction log in Funding Account.
+    /// <https://bybit-exchange.github.io/docs/v5/asset/fund-history>
+    pub async fn get_funding_acc_history(
+        &self,
+        params: GetFundingAccHistoryParams,
+    ) -> Result<ApiResponse> {
+        self.submit_request(
+            Method::Get,
+            asset::GET_FUNDING_ACC_HISTORY,
+            Some(params_to_map(&params)),
+            true,
+        )
+        .await
+    }
 }

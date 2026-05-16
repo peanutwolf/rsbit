@@ -371,6 +371,29 @@ pub struct ConfirmAQuoteSmallBalanceParams {
 
 // get_exchange_history_small_balance — no parameters needed.
 
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetAssetOverviewParams {
+    /// User ID. Required when master API key queries a sub-account.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub member_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub with_bonus: Option<String>,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetFundingAccHistoryParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub create_time_from: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub create_time_to: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

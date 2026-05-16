@@ -36,6 +36,11 @@ pub const GET_SMALL_BALANCE_COINS: &str = "/v5/asset/covert/small-balance-list";
 pub const REQUEST_A_QUOTE_SMALL_BALANCE: &str = "/v5/asset/covert/get-quote";
 pub const CONFIRM_A_QUOTE_SMALL_BALANCE: &str = "/v5/asset/covert/small-balance-execute";
 pub const GET_EXCHANGE_HISTORY_SMALL_BALANCE: &str = "/v5/asset/covert/small-balance-history";
+pub const GET_ASSET_OVERVIEW: &str = "/v5/asset/asset-overview";
+pub const GET_FUNDING_ACC_HISTORY: &str = "/v5/asset/fundinghistory";
+// Note: the fiat-convert endpoints added to pybit's asset module in v5.15.0rc2
+// (/v5/fiat/balance-query, /v5/fiat/quote-apply, etc.) are already covered by
+// rsbit's fiat module and are not duplicated here.
 
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
@@ -51,4 +56,5 @@ pub(crate) const ALL: &[&str] = &[
     REQUEST_A_QUOTE, CONFIRM_A_QUOTE, GET_CONVERT_STATUS, GET_CONVERT_HISTORY,
     GET_SMALL_BALANCE_COINS, REQUEST_A_QUOTE_SMALL_BALANCE,
     CONFIRM_A_QUOTE_SMALL_BALANCE, GET_EXCHANGE_HISTORY_SMALL_BALANCE,
+    GET_ASSET_OVERVIEW, GET_FUNDING_ACC_HISTORY,
 ];
