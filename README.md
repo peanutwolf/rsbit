@@ -6,11 +6,10 @@ Provides async HTTP and WebSocket clients for trading on Bybit, with
 HMAC-SHA256 and RSA authentication, automatic retry/rate-limit handling,
 and full V5 API coverage.
 
-Migrated from the official Python SDK
+Ported from the official Python SDK
 [pybit](https://github.com/bybit-exchange/pybit)
-(commit [`fb34fca`](https://github.com/bybit-exchange/pybit/commit/fb34fca))
 to idiomatic Rust using [Claude Code](https://docs.anthropic.com/en/docs/claude-code)
-by Anthropic.
+by Anthropic. Currently tracking pybit v5.16.0.
 
 ## Installation
 
@@ -18,7 +17,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-rsbit = "0.1"
+rsbit = "0.2"
 ```
 
 ## Feature Flags
@@ -31,7 +30,7 @@ rsbit = "0.1"
 To use native TLS instead of rustls:
 
 ```toml
-rsbit = { version = "0.1", default-features = false, features = ["native-tls"] }
+rsbit = { version = "0.2", default-features = false, features = ["native-tls"] }
 ```
 
 ## Quick Start
@@ -120,6 +119,36 @@ async fn main() -> rsbit::error::Result<()> {
 }
 ```
 
+### P2P Trading
+
+```rust
+use rsbit::{ClientConfig, HTTP};
+use rsbit::params::p2p::{GetOrdersParams, GetOnlineAdsParams};
+
+#[tokio::main]
+async fn main() -> rsbit::error::Result<()> {
+    let client = HTTP::new(ClientConfig::mainnet("api_key", "api_secret"))?;
+
+    // Browse online ads
+    let ads = client.get_p2p_online_ads(GetOnlineAdsParams {
+        token_id: "USDT".into(),
+        currency_id: "USD".into(),
+        side: "1".into(), // 1 = buy
+    }).await?;
+    println!("{}", ads.body);
+
+    // List your orders
+    let orders = client.get_p2p_orders(GetOrdersParams {
+        page: "1".into(),
+        size: "20".into(),
+        ..Default::default()
+    }).await?;
+    println!("{}", orders.body);
+
+    Ok(())
+}
+```
+
 ## Authentication
 
 The SDK supports two authentication methods:
@@ -173,22 +202,23 @@ cargo run --example http_basic
 
 ## API Coverage
 
-The SDK covers all Bybit V5 API endpoints across 19 categories:
+The SDK covers all Bybit V5 API endpoints across 20 categories:
 
 | Category | Description |
 |----------|-------------|
 | Market | Kline, tickers, orderbook, trades, instruments, funding rates |
 | Trade | Create/amend/cancel orders, batch operations, borrow quota |
 | Position | Position info, leverage, margin, risk limit, TP/SL |
-| Account | Wallet balance, fee rates, account info, collateral |
-| Asset | Transfers, deposits, withdrawals, coin info |
-| User | API key management, account settings |
-| Spot Margin | Toggle spot margin, set leverage |
+| Account | Wallet balance, fee rates, account info, collateral, delta mode |
+| Asset | Transfers, deposits, withdrawals, coin info, asset overview |
+| User | API key management, account settings, agreements, referrals |
+| P2P | Account info, ads, orders, counterparty, chat, payment types |
+| Spot Margin | Toggle spot margin, set leverage, currency data |
 | Spot Leverage | Leveraged token info and purchase/redeem |
-| Broker | Broker earnings, sub-account management |
+| Broker | Broker earnings, sub-account management, rate limit management |
 | Earn | Savings products, staking |
-| Fiat | Fiat deposit/withdraw records |
-| Crypto Loan | Collateral, loan, repay operations |
+| Fiat | Fiat deposit/withdraw, quote, execute, balance |
+| Crypto Loan | Collateral, loan, repay, max loan amount |
 | Institutional Loan | Institutional lending endpoints |
 | Pre-upgrade | Pre-upgrade order and trade history |
 | Spread | Spread trading instruments, orderbook, tickers |
