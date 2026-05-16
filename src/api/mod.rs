@@ -13,6 +13,7 @@ pub mod fiat;
 pub mod institutional_loan;
 pub mod market;
 pub mod misc;
+pub mod p2p;
 pub mod position;
 pub mod pre_upgrade;
 pub mod rate_limit;

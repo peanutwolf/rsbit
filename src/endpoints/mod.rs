@@ -12,6 +12,7 @@ pub mod fiat;
 pub mod institutional_loan;
 pub mod market;
 pub mod misc;
+pub mod p2p;
 pub mod position;
 pub mod pre_upgrade;
 pub mod rate_limit;
@@ -44,6 +45,7 @@ pub(crate) fn all_endpoints() -> Vec<&'static str> {
     paths.extend_from_slice(&pre_upgrade::ALL);
     paths.extend_from_slice(&spread::ALL);
     paths.extend_from_slice(&institutional_loan::ALL);
+    paths.extend_from_slice(&p2p::ALL);
     paths
 }
 
@@ -104,5 +106,6 @@ mod tests {
         check_no_dupes!(pre_upgrade::ALL, "pre_upgrade");
         check_no_dupes!(spread::ALL, "spread");
         check_no_dupes!(institutional_loan::ALL, "institutional_loan");
+        check_no_dupes!(p2p::ALL, "p2p");
     }
 }
