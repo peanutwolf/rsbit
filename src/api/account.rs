@@ -271,16 +271,17 @@ impl HttpManager {
         .await
     }
 
-    // ── Set No Convert Repay ──────────────────────────────────────
+    // ── Manual No Convert Repay ───────────────────────────────────
 
-    /// Turn off auto repayment using liability (UTA 2.0 only).
-    pub async fn set_no_convert_repay(
+    /// Manual repay without asset conversion (UTA 2.0 only).
+    /// Renamed from `set_no_convert_repay` to match pybit v5.15.0rc2.
+    pub async fn manual_no_convert_repay(
         &self,
-        params: SetNoConvertRepayParams,
+        params: ManualNoConvertRepayParams,
     ) -> Result<ApiResponse> {
         self.submit_request(
             Method::Post,
-            account::SET_NO_CONVERT_REPAY,
+            account::NO_CONVERT_REPAY,
             Some(params_to_map(&params)),
             true,
         )
@@ -391,6 +392,23 @@ impl HttpManager {
         self.submit_request(
             Method::Post,
             account::SET_LIMIT_PRICE_ACTION,
+            Some(params_to_map(&params)),
+            true,
+        )
+        .await
+    }
+
+    // ── Set Delta Mode ────────────────────────────────────────────
+
+    /// Enable or disable delta neutral mode for the account.
+    /// <https://bybit-exchange.github.io/docs/v5/account/set-delta-mode>
+    pub async fn set_delta_mode(
+        &self,
+        params: SetDeltaModeParams,
+    ) -> Result<ApiResponse> {
+        self.submit_request(
+            Method::Post,
+            account::SET_DELTA_MODE,
             Some(params_to_map(&params)),
             true,
         )

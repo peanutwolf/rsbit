@@ -17,7 +17,7 @@ pub const SET_MARGIN_MODE: &str = "/v5/account/set-margin-mode";
 pub const SET_MMP: &str = "/v5/account/mmp-modify";
 pub const RESET_MMP: &str = "/v5/account/mmp-reset";
 pub const GET_MMP_STATE: &str = "/v5/account/mmp-state";
-pub const SET_NO_CONVERT_REPAY: &str = "/v5/account/no-convert-repay";
+pub const NO_CONVERT_REPAY: &str = "/v5/account/no-convert-repay";
 pub const BORROW: &str = "/v5/account/borrow";
 pub const GET_INSTRUMENTS_INFO: &str = "/v5/account/instruments-info";
 pub const REPAY: &str = "/v5/account/repay";
@@ -26,6 +26,7 @@ pub const SET_HEDGING_MODE: &str = "/v5/account/set-hedging-mode";
 pub const GET_SMP_GROUP: &str = "/v5/account/smp-group";
 pub const GET_USER_SETTING_CONFIG: &str = "/v5/account/user-setting-config";
 pub const SET_LIMIT_PRICE_ACTION: &str = "/v5/account/set-limit-px-action";
+pub const SET_DELTA_MODE: &str = "/v5/account/set-delta-mode";
 
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
@@ -33,7 +34,7 @@ pub(crate) const ALL: &[&str] = &[
     GET_BORROW_HISTORY, REPAY_LIABILITY, GET_COLLATERAL_INFO, SET_COLLATERAL_COIN,
     BATCH_SET_COLLATERAL_COIN, GET_COIN_GREEKS, GET_FEE_RATE, GET_ACCOUNT_INFO,
     GET_TRANSACTION_LOG, GET_CONTRACT_TRANSACTION_LOG, SET_MARGIN_MODE, SET_MMP,
-    RESET_MMP, GET_MMP_STATE, SET_NO_CONVERT_REPAY, BORROW, GET_INSTRUMENTS_INFO,
+    RESET_MMP, GET_MMP_STATE, NO_CONVERT_REPAY, BORROW, GET_INSTRUMENTS_INFO,
     REPAY, QUERY_DCP_INFO, SET_HEDGING_MODE, GET_SMP_GROUP, GET_USER_SETTING_CONFIG,
-    SET_LIMIT_PRICE_ACTION,
+    SET_LIMIT_PRICE_ACTION, SET_DELTA_MODE,
 ];

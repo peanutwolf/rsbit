@@ -157,8 +157,9 @@ pub struct GetMmpStateParams {
 
 #[derive(Debug, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SetNoConvertRepayParams {
-    pub no_convert_repay: String,
+pub struct ManualNoConvertRepayParams {
+    pub coin: String,
+    pub amount: String,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -193,6 +194,13 @@ pub struct SetHedgingModeParams {
 pub struct SetLimitPriceActionParams {
     pub category: String,
     pub modify_enable: String,
+}
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetDeltaModeParams {
+    /// "1" to enable, "0" to disable delta neutral mode.
+    pub delta_enable: String,
 }
 
 #[cfg(test)]
