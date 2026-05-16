@@ -221,12 +221,17 @@ impl HttpManager {
             .await
             .map_err(|e| RetryOrError::Error(BybitError::Http(e)))?;
 
-        // Check retCode
-        let ret_code = body.get("retCode").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+        // Check retCode — P2P endpoints use snake_case ret_code/ret_msg instead.
+        let ret_code = body
+            .get("retCode")
+            .or_else(|| body.get("ret_code"))
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
 
         if ret_code != 0 {
             let ret_msg = body
                 .get("retMsg")
+                .or_else(|| body.get("ret_msg"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("Unknown error")
                 .to_string();
