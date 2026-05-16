@@ -22,6 +22,7 @@ pub const GET_MAX_BORROWABLE: &str = "/v5/spot-margin-trade/max-borrowable";
 pub const GET_POSITION_TIERS: &str = "/v5/spot-margin-trade/position-tiers";
 pub const GET_COIN_STATE: &str = "/v5/spot-margin-trade/coinstate";
 pub const GET_REPAYMENT_AVAILABLE_AMOUNT: &str = "/v5/spot-margin-trade/repayment-available-amount";
+pub const GET_CURRENCY_DATA: &str = "/v5/spot-margin-trade/currency-data";
 
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
@@ -32,5 +33,5 @@ pub(crate) const ALL: &[&str] = &[
     NORMAL_GET_LOAN_ACCOUNT_INFO, NORMAL_BORROW, NORMAL_REPAY,
     NORMAL_GET_BORROW_ORDER_DETAIL, NORMAL_GET_REPAYMENT_ORDER_DETAIL,
     NORMAL_TOGGLE_MARGIN_TRADE, GET_MAX_BORROWABLE, GET_POSITION_TIERS,
-    GET_COIN_STATE, GET_REPAYMENT_AVAILABLE_AMOUNT,
+    GET_COIN_STATE, GET_REPAYMENT_AVAILABLE_AMOUNT, GET_CURRENCY_DATA,
 ];

@@ -71,4 +71,16 @@ impl HttpManager {
     pub async fn get_escrow_sub_members(&self) -> Result<ApiResponse> {
         self.submit_request(Method::Get, user::GET_ESCROW_SUB_MEMBERS, None, true).await
     }
+
+    /// Sign a user agreement.
+    /// <https://bybit-exchange.github.io/docs/v5/user/sign-agreement>
+    pub async fn sign_agreement(&self, params: SignAgreementParams) -> Result<ApiResponse> {
+        self.submit_request(Method::Post, user::SIGN_AGREEMENT, Some(params_to_map(&params)), true).await
+    }
+
+    /// Get friend referral information.
+    /// <https://bybit-exchange.github.io/docs/v5/user/friend-referral>
+    pub async fn get_friend_referrals(&self) -> Result<ApiResponse> {
+        self.submit_request(Method::Get, user::GET_FRIEND_REFERRALS, None, true).await
+    }
 }

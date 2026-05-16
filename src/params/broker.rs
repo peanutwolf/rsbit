@@ -79,6 +79,26 @@ pub struct GetIssuedVoucherParams {
     pub spec_code: String,
 }
 
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetBrokerAllRateLimitsParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub uids: Option<String>,
+}
+
+// get_broker_rate_limit_cap — no required parameters.
+
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SetBrokerRateLimitParams {
+    /// JSON array of { uids, bizType, rate } objects.
+    pub list: serde_json::Value,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

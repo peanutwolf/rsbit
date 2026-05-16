@@ -14,11 +14,12 @@ pub const GET_CLOSED_PNL: &str = "/v5/position/closed-pnl";
 pub const MOVE_POSITION: &str = "/v5/position/move-positions";
 pub const GET_MOVE_POSITION_HISTORY: &str = "/v5/position/move-history";
 pub const GET_CLOSED_OPTIONS_POSITIONS: &str = "/v5/position/get-closed-positions";
+pub const CONFIRM_PENDING_MMR: &str = "/v5/position/confirm-pending-mmr";
 
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
     GET_POSITIONS, SET_LEVERAGE, SWITCH_MARGIN_MODE, SET_TP_SL_MODE,
     SWITCH_POSITION_MODE, SET_RISK_LIMIT, SET_TRADING_STOP, SET_AUTO_ADD_MARGIN,
     ADD_MARGIN, GET_EXECUTIONS, GET_CLOSED_PNL, MOVE_POSITION,
-    GET_MOVE_POSITION_HISTORY, GET_CLOSED_OPTIONS_POSITIONS,
+    GET_MOVE_POSITION_HISTORY, GET_CLOSED_OPTIONS_POSITIONS, CONFIRM_PENDING_MMR,
 ];

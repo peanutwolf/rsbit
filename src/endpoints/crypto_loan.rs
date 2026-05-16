@@ -45,6 +45,7 @@ pub const GET_LENDING_ORDERS_FIXED_CRYPTO_LOAN: &str = "/v5/crypto-loan-fixed/su
 pub const REPAY_FIXED_CRYPTO_LOAN: &str = "/v5/crypto-loan-fixed/fully-repay";
 pub const COLLATERAL_REPAYMENT_FIXED_CRYPTO_LOAN: &str = "/v5/crypto-loan-fixed/repay-collateral";
 pub const GET_REPAYMENT_HISTORY_FIXED_CRYPTO_LOAN: &str = "/v5/crypto-loan-fixed/repayment-history";
+pub const GET_MAX_LOAN_AMOUNT_NEW_CRYPTO_LOAN: &str = "/v5/crypto-loan-common/max-loan";
 
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
@@ -72,4 +73,5 @@ pub(crate) const ALL: &[&str] = &[
     GET_LENDING_ORDERS_FIXED_CRYPTO_LOAN, REPAY_FIXED_CRYPTO_LOAN,
     COLLATERAL_REPAYMENT_FIXED_CRYPTO_LOAN,
     GET_REPAYMENT_HISTORY_FIXED_CRYPTO_LOAN,
+    GET_MAX_LOAN_AMOUNT_NEW_CRYPTO_LOAN,
 ];

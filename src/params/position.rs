@@ -206,6 +206,14 @@ pub struct GetClosedOptionsPositionsParams {
     pub cursor: Option<String>,
 }
 
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfirmNewRiskLimitParams {
+    /// Product type. "linear" or "inverse"
+    pub category: String,
+    pub symbol: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

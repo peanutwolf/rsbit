@@ -99,4 +99,10 @@ impl HttpManager {
     pub async fn spot_margin_trade_normal_toggle_margin_trade(&self, params: NormalToggleMarginTradeParams) -> Result<ApiResponse> {
         self.submit_request(Method::Post, spot_margin::NORMAL_TOGGLE_MARGIN_TRADE, Some(params_to_map(&params)), true).await
     }
+
+    /// Get spot margin currency data information.
+    /// <https://bybit-exchange.github.io/docs/v5/spot-margin-uta/currency-data>
+    pub async fn spot_margin_trade_get_currency_data(&self) -> Result<ApiResponse> {
+        self.submit_request(Method::Get, spot_margin::GET_CURRENCY_DATA, None, false).await
+    }
 }

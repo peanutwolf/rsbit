@@ -35,4 +35,22 @@ impl HttpManager {
     pub async fn get_issued_voucher(&self, params: GetIssuedVoucherParams) -> Result<ApiResponse> {
         self.submit_request(Method::Post, broker::GET_ISSUED_VOUCHER, Some(params_to_map(&params)), true).await
     }
+
+    /// Get all broker API rate limits (institutional only).
+    /// <https://bybit-exchange.github.io/docs/v5/broker/exchange-broker/rate-limit/query-all>
+    pub async fn get_broker_all_rate_limits(&self, params: GetBrokerAllRateLimitsParams) -> Result<ApiResponse> {
+        self.submit_request(Method::Get, broker::GET_BROKER_ALL_RATE_LIMITS, Some(params_to_map(&params)), true).await
+    }
+
+    /// Get broker API rate limit cap (institutional only).
+    /// <https://bybit-exchange.github.io/docs/v5/broker/exchange-broker/rate-limit/query-cap>
+    pub async fn get_broker_rate_limit_cap(&self) -> Result<ApiResponse> {
+        self.submit_request(Method::Get, broker::GET_BROKER_RATE_LIMIT_CAP, None, true).await
+    }
+
+    /// Set broker API rate limit (institutional only).
+    /// <https://bybit-exchange.github.io/docs/v5/broker/exchange-broker/rate-limit/set>
+    pub async fn set_broker_rate_limit(&self, params: SetBrokerRateLimitParams) -> Result<ApiResponse> {
+        self.submit_request(Method::Post, broker::SET_BROKER_RATE_LIMIT, Some(params_to_map(&params)), true).await
+    }
 }

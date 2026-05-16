@@ -158,6 +158,8 @@ pub struct GetRepaymentAvailableAmountParams {
     pub coin: String,
 }
 
+// spot_margin_trade_get_currency_data — no required parameters.
+
 #[cfg(test)]
 mod tests {
     use super::*;

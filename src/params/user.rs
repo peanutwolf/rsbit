@@ -118,6 +118,16 @@ pub struct GetUidWalletTypeParams {
 
 // get_escrow_sub_members — no parameters needed.
 
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SignAgreementParams {
+    /// 2: Metals commodity contracts
+    pub category: i32,
+    pub agree: bool,
+}
+
+// get_friend_referrals — no required parameters.
+
 #[cfg(test)]
 mod tests {
     use super::*;

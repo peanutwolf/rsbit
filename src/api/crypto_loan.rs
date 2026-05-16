@@ -212,4 +212,13 @@ impl HttpManager {
     ) -> Result<ApiResponse> {
         self.submit_request(Method::Get, crypto_loan::GET_REPAYMENT_HISTORY_FIXED_CRYPTO_LOAN, Some(params_to_map(&params)), true).await
     }
+
+    /// Get max loan amount for new crypto loan.
+    /// <https://bybit-exchange.github.io/docs/v5/new-crypto-loan/max-loan-amt>
+    pub async fn get_max_loan_amount_new_crypto_loan(
+        &self,
+        params: GetMaxLoanAmountNewCryptoLoanParams,
+    ) -> Result<ApiResponse> {
+        self.submit_request(Method::Post, crypto_loan::GET_MAX_LOAN_AMOUNT_NEW_CRYPTO_LOAN, Some(params_to_map(&params)), true).await
+    }
 }

@@ -240,6 +240,13 @@ pub struct FixedCryptoLoanGenericQueryParams {
     pub params: serde_json::Map<String, Value>,
 }
 
+#[derive(Debug, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMaxLoanAmountNewCryptoLoanParams {
+    /// Coin to borrow
+    pub currency: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

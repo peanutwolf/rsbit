@@ -233,4 +233,19 @@ impl HttpManager {
         )
         .await
     }
+
+    /// Confirm acceptance of a new risk limit after a position is liquidated.
+    /// <https://bybit-exchange.github.io/docs/v5/position/confirm-mmr>
+    pub async fn confirm_new_risk_limit(
+        &self,
+        params: ConfirmNewRiskLimitParams,
+    ) -> Result<ApiResponse> {
+        self.submit_request(
+            Method::Post,
+            position::CONFIRM_PENDING_MMR,
+            Some(params_to_map(&params)),
+            true,
+        )
+        .await
+    }
 }

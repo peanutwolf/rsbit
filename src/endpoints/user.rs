@@ -16,6 +16,8 @@ pub const GET_UID_WALLET_TYPE: &str = "/v5/user/get-member-type";
 pub const DELETE_SUB_UID: &str = "/v5/user/del-submember";
 pub const GET_ALL_SUB_API_KEYS: &str = "/v5/user/sub-apikeys";
 pub const GET_ESCROW_SUB_MEMBERS: &str = "/v5/user/escrow_sub_members";
+pub const SIGN_AGREEMENT: &str = "/v5/user/agreement";
+pub const GET_FRIEND_REFERRALS: &str = "/v5/user/invitation/referrals";
 
 #[cfg(test)]
 pub(crate) const ALL: &[&str] = &[
@@ -23,5 +25,5 @@ pub(crate) const ALL: &[&str] = &[
     FREEZE_SUB_UID, GET_API_KEY_INFORMATION, MODIFY_MASTER_API_KEY, MODIFY_SUB_API_KEY,
     DELETE_MASTER_API_KEY, DELETE_SUB_API_KEY, GET_AFFILIATE_USER_INFO,
     GET_AFFILIATE_USER_LIST, GET_UID_WALLET_TYPE, DELETE_SUB_UID, GET_ALL_SUB_API_KEYS,
-    GET_ESCROW_SUB_MEMBERS,
+    GET_ESCROW_SUB_MEMBERS, SIGN_AGREEMENT, GET_FRIEND_REFERRALS,
 ];
