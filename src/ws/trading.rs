@@ -106,8 +106,57 @@ impl WsTradingManager {
     /// Connect to the trading WebSocket server.
     ///
     /// Performs the TLS/WS handshake, authenticates, and starts the
-    /// ping and read-loop tasks.
+    /// ping and read-loop tasks. The read loop automatically reconnects and
+    /// re-authenticates on connection loss when `restart_on_error` is enabled
+    /// in the config.
     pub async fn connect(&self) -> Result<()> {
+        let read = self.establish_connection().await?;
+
+        // Spawn the self-healing read loop BEFORE authenticating so that auth
+        // responses are processed (mirrors pybit's approach where run_forever()
+        // starts the read thread before _auth() is called).
+        let read_pending = Arc::clone(&self.pending);
+        let read_connected = Arc::clone(&self.connected);
+        let read_authenticated = Arc::clone(&self.authenticated);
+        let read_writer = Arc::clone(&self.writer);
+        let read_shutdown_tx = self.shutdown_tx.clone();
+        let mut read_shutdown = self.shutdown_tx.subscribe();
+        let config = Arc::clone(&self.config);
+        let url = self.url.clone();
+
+        tokio::spawn(async move {
+            run_trading_read_loop(
+                read,
+                &mut read_shutdown,
+                &read_pending,
+                &read_connected,
+                &read_authenticated,
+                &read_writer,
+                &read_shutdown_tx,
+                &config,
+                &url,
+            )
+            .await;
+        });
+
+        // Authenticate (trading always requires auth)
+        self.authenticate().await?;
+
+        // Spawn the ping task
+        spawn_ping_task(
+            Arc::clone(&self.writer),
+            self.config.ping_interval,
+            Arc::clone(&self.connected),
+            self.shutdown_tx.subscribe(),
+        );
+
+        Ok(())
+    }
+
+    /// Perform the WebSocket handshake and store the write half.
+    ///
+    /// Returns the read half so the caller can drive the read loop.
+    async fn establish_connection(&self) -> Result<RawReader> {
         tracing::debug!("Connecting to {}", self.url);
 
         let (ws_stream, _response) =
@@ -126,70 +175,7 @@ impl WsTradingManager {
         self.authenticated.store(false, Ordering::SeqCst);
         tracing::debug!("Connected to {}", self.url);
 
-        // Spawn the read loop BEFORE authenticating so that auth responses
-        // are processed (mirrors pybit's approach where run_forever() starts
-        // the read thread before _auth() is called).
-        let read_pending = Arc::clone(&self.pending);
-        let read_connected = Arc::clone(&self.connected);
-        let read_authenticated = Arc::clone(&self.authenticated);
-        let mut read_shutdown = self.shutdown_tx.subscribe();
-
-        tokio::spawn(async move {
-            let mut read = read;
-            loop {
-                tokio::select! {
-                    msg = read.next() => {
-                        match msg {
-                            Some(Ok(Message::Text(text))) => {
-                                let pending = Arc::clone(&read_pending);
-                                let authenticated = Arc::clone(&read_authenticated);
-                                tokio::spawn(async move {
-                                    dispatch_trading_message(
-                                        &text,
-                                        &pending,
-                                        &authenticated,
-                                    ).await;
-                                });
-                            }
-                            Some(Ok(Message::Close(_))) => {
-                                tracing::debug!("Trading WS closed by server");
-                                read_connected.store(false, Ordering::SeqCst);
-                                break;
-                            }
-                            Some(Ok(_)) => {}
-                            Some(Err(e)) => {
-                                tracing::error!("Trading WS read error: {}", e);
-                                read_connected.store(false, Ordering::SeqCst);
-                                break;
-                            }
-                            None => {
-                                tracing::debug!("Trading WS stream ended");
-                                read_connected.store(false, Ordering::SeqCst);
-                                break;
-                            }
-                        }
-                    }
-                    _ = read_shutdown.recv() => {
-                        tracing::debug!("Trading read loop shutting down");
-                        read_connected.store(false, Ordering::SeqCst);
-                        break;
-                    }
-                }
-            }
-        });
-
-        // Authenticate (trading always requires auth)
-        self.authenticate().await?;
-
-        // Spawn the ping task
-        spawn_ping_task(
-            Arc::clone(&self.writer),
-            self.config.ping_interval,
-            Arc::clone(&self.connected),
-            self.shutdown_tx.subscribe(),
-        );
-
-        Ok(())
+        Ok(read)
     }
 
     /// Check if the trading WebSocket is connected.
@@ -432,6 +418,225 @@ async fn dispatch_trading_message(
 
     // 4. Unknown
     tracing::debug!("Unhandled trading WS message: {}", msg);
+}
+
+/// The raw WebSocket read-half type.
+type RawReader = futures_util::stream::SplitStream<
+    tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+>;
+
+/// Run the trading read loop with automatic reconnection on disconnect.
+///
+/// When the connection drops and `restart_on_error` is enabled, this function
+/// reconnects up to `max_retries` times (0 = infinite), re-authenticating on
+/// each successful reconnection so subsequent order operations succeed instead
+/// of failing forever against a dead socket.
+#[allow(clippy::too_many_arguments)]
+async fn run_trading_read_loop(
+    mut read: RawReader,
+    shutdown: &mut broadcast::Receiver<()>,
+    pending: &Arc<RwLock<HashMap<String, Callback>>>,
+    connected: &Arc<AtomicBool>,
+    authenticated: &Arc<AtomicBool>,
+    writer: &WsWriter,
+    shutdown_tx: &broadcast::Sender<()>,
+    config: &Arc<WsConfig>,
+    url: &str,
+) {
+    let mut retry_count: u32 = 0;
+
+    loop {
+        // Inner read loop — processes messages until disconnect.
+        let should_reconnect =
+            read_until_disconnect(&mut read, shutdown, pending, connected, authenticated).await;
+
+        if !should_reconnect || !config.restart_on_error {
+            break;
+        }
+
+        // Drop the stale writer so any in-flight `send_raw` fails fast with
+        // `AlreadyClosed` instead of writing into a broken socket.
+        {
+            let mut w = writer.lock().await;
+            *w = None;
+        }
+
+        retry_count += 1;
+        if config.max_retries > 0 && retry_count > config.max_retries {
+            tracing::error!(
+                "Trading WS: max reconnect attempts ({}) exceeded",
+                config.max_retries
+            );
+            break;
+        }
+
+        // Exponential backoff: 2s, 4s, 8s, 16s, ... capped at 30s.
+        let delay = Duration::from_secs((1u64 << retry_count.min(4)).min(30));
+        tracing::info!(
+            "Trading WS reconnecting in {:?} (attempt {}{})",
+            delay,
+            retry_count,
+            if config.max_retries > 0 {
+                format!("/{}", config.max_retries)
+            } else {
+                String::new()
+            }
+        );
+
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => {}
+            _ = shutdown.recv() => {
+                tracing::debug!("Trading reconnect cancelled by shutdown");
+                break;
+            }
+        }
+
+        // Attempt reconnection.
+        match reconnect_trading(url, writer, connected, authenticated, pending, config).await {
+            Ok(new_read) => {
+                read = new_read;
+                retry_count = 0; // Reset on successful reconnect
+                tracing::info!("Trading WS reconnected successfully");
+
+                // Spawn a fresh ping task for this new connection.
+                spawn_ping_task(
+                    Arc::clone(writer),
+                    config.ping_interval,
+                    Arc::clone(connected),
+                    shutdown_tx.subscribe(),
+                );
+            }
+            Err(e) => {
+                tracing::error!("Trading WS reconnect failed: {}", e);
+                // Loop continues — will retry after backoff.
+            }
+        }
+    }
+}
+
+/// Read messages until disconnect. Returns `true` if reconnect should be attempted.
+async fn read_until_disconnect(
+    read: &mut RawReader,
+    shutdown: &mut broadcast::Receiver<()>,
+    pending: &Arc<RwLock<HashMap<String, Callback>>>,
+    connected: &Arc<AtomicBool>,
+    authenticated: &Arc<AtomicBool>,
+) -> bool {
+    loop {
+        tokio::select! {
+            msg = read.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        let pending = Arc::clone(pending);
+                        let authenticated = Arc::clone(authenticated);
+                        tokio::spawn(async move {
+                            dispatch_trading_message(&text, &pending, &authenticated).await;
+                        });
+                    }
+                    Some(Ok(Message::Close(_))) => {
+                        tracing::debug!("Trading WS closed by server");
+                        connected.store(false, Ordering::SeqCst);
+                        return true; // Try to reconnect
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(e)) => {
+                        tracing::error!("Trading WS read error: {}", e);
+                        connected.store(false, Ordering::SeqCst);
+                        return true; // Try to reconnect
+                    }
+                    None => {
+                        tracing::debug!("Trading WS stream ended");
+                        connected.store(false, Ordering::SeqCst);
+                        return true; // Try to reconnect
+                    }
+                }
+            }
+            _ = shutdown.recv() => {
+                tracing::debug!("Trading read loop shutting down");
+                connected.store(false, Ordering::SeqCst);
+                return false; // Graceful shutdown — don't reconnect
+            }
+        }
+    }
+}
+
+/// Perform a trading reconnection: handshake, then re-authenticate.
+async fn reconnect_trading(
+    url: &str,
+    writer: &WsWriter,
+    connected: &Arc<AtomicBool>,
+    authenticated: &Arc<AtomicBool>,
+    pending: &Arc<RwLock<HashMap<String, Callback>>>,
+    config: &Arc<WsConfig>,
+) -> Result<RawReader> {
+    tracing::debug!("Reconnecting trading WS to {}", url);
+
+    let (ws_stream, _response) =
+        tokio_tungstenite::connect_async_with_config(url, None, true)
+            .await
+            .map_err(BybitError::WebSocket)?;
+
+    let (write, mut read) = ws_stream.split();
+
+    // Store the new writer.
+    {
+        let mut w = writer.lock().await;
+        *w = Some(write);
+    }
+    connected.store(true, Ordering::SeqCst);
+    authenticated.store(false, Ordering::SeqCst);
+
+    // Re-authenticate. The caller's read loop is not running yet, so read
+    // messages inline here until the auth response arrives. Dispatch inline
+    // (awaited) so the `authenticated` flag is set before we re-check it.
+    let auth_msg =
+        auth::build_ws_auth_message(&config.client_config, config.private_auth_expire)?;
+    {
+        let mut w = writer.lock().await;
+        match w.as_mut() {
+            Some(wr) => wr
+                .send(Message::Text(auth_msg))
+                .await
+                .map_err(BybitError::WebSocket)?,
+            None => {
+                return Err(BybitError::WebSocket(
+                    tokio_tungstenite::tungstenite::Error::AlreadyClosed,
+                ))
+            }
+        }
+    }
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        tokio::select! {
+            msg = read.next() => {
+                match msg {
+                    Some(Ok(Message::Text(text))) => {
+                        dispatch_trading_message(&text, pending, authenticated).await;
+                    }
+                    Some(Ok(Message::Close(_))) => {
+                        tracing::warn!("Trading connection closed during re-auth");
+                        break;
+                    }
+                    Some(Ok(_)) => {}
+                    Some(Err(e)) => return Err(BybitError::WebSocket(e)),
+                    None => break,
+                }
+                if authenticated.load(Ordering::SeqCst) {
+                    tracing::debug!("Trading re-authentication successful");
+                    break;
+                }
+            }
+            _ = tokio::time::sleep_until(deadline) => {
+                tracing::warn!("Trading re-authentication timed out");
+                break;
+            }
+        }
+    }
+
+    Ok(read)
 }
 
 #[cfg(test)]
