@@ -21,6 +21,9 @@ use crate::ws::manager::{is_pong, spawn_ping_task, WsConfig, WsWriter};
 use crate::ws::subscription::Callback;
 use crate::ws::ws_url;
 
+/// Hook invoked after each successful reconnect + re-auth.
+type ReconnectHook = Arc<dyn Fn() + Send + Sync>;
+
 /// WebSocket trading manager for order operations.
 ///
 /// Connects to the Bybit `/v5/trade` WebSocket endpoint and provides
@@ -63,6 +66,8 @@ pub struct WsTradingManager {
     authenticated: Arc<AtomicBool>,
     /// Pending request callbacks, keyed by reqId. Popped on response.
     pending: Arc<RwLock<HashMap<String, Callback>>>,
+    /// Invoked after each successful reconnect + re-auth.
+    on_reconnect: Arc<std::sync::RwLock<Option<ReconnectHook>>>,
     shutdown_tx: broadcast::Sender<()>,
     /// X-BAPI-RECV-WINDOW header value. 0 means omit.
     recv_window: u32,
@@ -85,6 +90,7 @@ impl WsTradingManager {
             connected: Arc::new(AtomicBool::new(false)),
             authenticated: Arc::new(AtomicBool::new(false)),
             pending: Arc::new(RwLock::new(HashMap::new())),
+            on_reconnect: Arc::new(std::sync::RwLock::new(None)),
             shutdown_tx,
             recv_window: 0,
             referral_id: String::new(),
@@ -101,6 +107,13 @@ impl WsTradingManager {
     pub fn with_referral_id(mut self, referral_id: impl Into<String>) -> Self {
         self.referral_id = referral_id.into();
         self
+    }
+
+    /// Register a hook invoked after each successful reconnect + re-auth,
+    /// e.g. to reconcile state that requests lost on the old connection
+    /// may have left behind.
+    pub fn set_on_reconnect(&self, hook: impl Fn() + Send + Sync + 'static) {
+        *self.on_reconnect.write().unwrap() = Some(Arc::new(hook));
     }
 
     /// Connect to the trading WebSocket server.
@@ -121,6 +134,7 @@ impl WsTradingManager {
         let read_writer = Arc::clone(&self.writer);
         let read_shutdown_tx = self.shutdown_tx.clone();
         let mut read_shutdown = self.shutdown_tx.subscribe();
+        let read_on_reconnect = Arc::clone(&self.on_reconnect);
         let config = Arc::clone(&self.config);
         let url = self.url.clone();
 
@@ -133,6 +147,7 @@ impl WsTradingManager {
                 &read_authenticated,
                 &read_writer,
                 &read_shutdown_tx,
+                &read_on_reconnect,
                 &config,
                 &url,
             )
@@ -442,6 +457,7 @@ async fn run_trading_read_loop(
     authenticated: &Arc<AtomicBool>,
     writer: &WsWriter,
     shutdown_tx: &broadcast::Sender<()>,
+    on_reconnect: &Arc<std::sync::RwLock<Option<ReconnectHook>>>,
     config: &Arc<WsConfig>,
     url: &str,
 ) {
@@ -452,15 +468,20 @@ async fn run_trading_read_loop(
         let should_reconnect =
             read_until_disconnect(&mut read, shutdown, pending, connected, authenticated).await;
 
-        if !should_reconnect || !config.restart_on_error {
-            break;
-        }
-
         // Drop the stale writer so any in-flight `send_raw` fails fast with
         // `AlreadyClosed` instead of writing into a broken socket.
         {
             let mut w = writer.lock().await;
             *w = None;
+        }
+
+        // Responses for requests in flight at disconnect can never arrive:
+        // fail their callbacks so callers roll back optimistic state (e.g.
+        // local order placeholders) instead of waiting forever.
+        fail_pending_requests(pending).await;
+
+        if !should_reconnect || !config.restart_on_error {
+            break;
         }
 
         retry_count += 1;
@@ -507,12 +528,40 @@ async fn run_trading_read_loop(
                     Arc::clone(connected),
                     shutdown_tx.subscribe(),
                 );
+
+                let hook = on_reconnect.read().unwrap().clone();
+                if let Some(hook) = hook {
+                    hook();
+                }
             }
             Err(e) => {
                 tracing::error!("Trading WS reconnect failed: {}", e);
                 // Loop continues — will retry after backoff.
             }
         }
+    }
+}
+
+/// Fail every pending request callback with a synthetic error response.
+///
+/// Called on disconnect: responses for requests that were in flight can never
+/// arrive on the dead connection, and callers rely on the error path to roll
+/// back optimistic state (e.g. local order placeholders).
+async fn fail_pending_requests(pending: &Arc<RwLock<HashMap<String, Callback>>>) {
+    let drained: Vec<(String, Callback)> = pending.write().await.drain().collect();
+    if drained.is_empty() {
+        return;
+    }
+    tracing::warn!(
+        "Trading WS disconnected with {} request(s) in flight — failing their callbacks",
+        drained.len()
+    );
+    for (req_id, cb) in drained {
+        cb(serde_json::json!({
+            "reqId": req_id,
+            "retCode": -1,
+            "retMsg": "trading WS disconnected before response",
+        }));
     }
 }
 
@@ -529,11 +578,9 @@ async fn read_until_disconnect(
             msg = read.next() => {
                 match msg {
                     Some(Ok(Message::Text(text))) => {
-                        let pending = Arc::clone(pending);
-                        let authenticated = Arc::clone(authenticated);
-                        tokio::spawn(async move {
-                            dispatch_trading_message(&text, &pending, &authenticated).await;
-                        });
+                        // Dispatch inline: spawning a task per message loses the
+                        // stream's ordering guarantee across responses.
+                        dispatch_trading_message(&text, pending, authenticated).await;
                     }
                     Some(Ok(Message::Close(_))) => {
                         tracing::debug!("Trading WS closed by server");
@@ -800,6 +847,30 @@ mod tests {
         assert_eq!(count.load(Ordering::SeqCst), 1);
         // Callback should be removed
         assert!(pending.read().await.get("test-req-2").is_none());
+    }
+
+    #[tokio::test]
+    async fn fail_pending_invokes_callbacks_with_error() {
+        use std::sync::atomic::AtomicU32;
+
+        let pending = Arc::new(RwLock::new(HashMap::new()));
+        let count = Arc::new(AtomicU32::new(0));
+
+        let counter = Arc::clone(&count);
+        let cb: Callback = Arc::new(move |msg: Value| {
+            assert_ne!(msg["retCode"], 0);
+            counter.fetch_add(1, Ordering::SeqCst);
+        });
+        {
+            let mut p = pending.write().await;
+            p.insert("req-1".into(), Arc::clone(&cb));
+            p.insert("req-2".into(), cb);
+        }
+
+        fail_pending_requests(&pending).await;
+
+        assert_eq!(count.load(Ordering::SeqCst), 2);
+        assert!(pending.read().await.is_empty());
     }
 
     #[tokio::test]
