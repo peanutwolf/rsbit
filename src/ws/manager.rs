@@ -511,10 +511,9 @@ async fn dispatch_message(
         let reg = registry.read().await;
         if let Some(callback) = reg.get_callback(topic) {
             let cb = Arc::clone(callback);
-            let msg_owned = msg.clone();
             // Call callback outside the lock to avoid deadlocks
             drop(reg);
-            cb(msg_owned);
+            cb(msg);
         } else if log {
             tracing::debug!("No callback for topic: {}", topic);
         }
